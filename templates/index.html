@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <title>LLM Assistant</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full bg-slate-950 text-slate-100 flex items-center justify-center">
+
+  <div class="w-full max-w-3xl h-[90vh] flex flex-col border border-slate-800 rounded-2xl bg-slate-900/70 shadow-2xl overflow-hidden">
+    <!-- Header -->
+    <header class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
+      <div class="flex items-center gap-2">
+        <div class="h-8 w-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+          <span class="text-emerald-400 text-lg font-bold">S</span>
+        </div>
+        <div>
+          <h1 class="font-semibold text-sm sm:text-base">LLM Assistant</h1>
+          <p class="text-xs text-slate-400">Powered by local RAG + Ollama (phi3)</p>
+        </div>
+      </div>
+      <div class="text-[10px] sm:text-xs text-slate-400">
+        Status: <span class="text-emerald-400">Online</span>
+      </div>
+    </header>
+
+    <!-- Chat Area -->
+    <main id="chat-container" class="flex-1 overflow-y-auto px-3 sm:px-4 py-3 space-y-3 text-sm sm:text-base">
+      <!-- Initial bot message -->
+      <div class="flex items-start gap-2">
+        <div class="h-7 w-7 rounded-full bg-emerald-500/20 flex items-center justify-center mt-1">
+          <span class="text-emerald-400 text-xs font-bold">S</span>
+        </div>
+        <div class="bg-slate-800/80 rounded-2xl rounded-tl-none px-3 py-2 max-w-[80%]">
+          <p>Hi! 👋 I'm your LLM assistant running fully on your machine.</p>
+          <p class="mt-1 text-xs text-slate-400">
+            Ask me about Leave Management, Attendance, Company Profile, etc.
+          </p>
+        </div>
+      </div>
+    </main>
+
+    <!-- Input Area -->
+    <footer class="border-t border-slate-800 bg-slate-900/80 px-3 sm:px-4 py-2">
+      <form id="chat-form" class="flex items-end gap-2">
+        <textarea
+          id="user-input"
+          rows="1"
+          placeholder="Type your question about SAM Lite..."
+          class="flex-1 resize-none rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-sm sm:text-base
+                 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500
+                 placeholder:text-slate-500"
+        ></textarea>
+        <button
+          type="submit"
+          id="send-btn"
+          class="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-3 py-2 text-sm font-semibold
+                 text-slate-950 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed
+                 transition-colors"
+        >
+          Send
+        </button>
+      </form>
+      <p class="mt-1 text-[10px] text-slate-500 text-right">
+        Responses may take a few seconds while the local model runs.
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    const chatContainer = document.getElementById("chat-container");
+    const chatForm = document.getElementById("chat-form");
+    const userInput = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
+
+    function appendMessage(role, text, isTemporary = false) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "flex items-start gap-2 " + (role === "user" ? "justify-end" : "justify-start");
+
+      let bubbleClasses =
+        "rounded-2xl px-3 py-2 max-w-[80%] whitespace-pre-wrap break-words ";
+      if (role === "user") {
+        bubbleClasses += "bg-emerald-500 text-slate-950 rounded-tr-none";
+      } else {
+        bubbleClasses += "bg-slate-800/80 text-slate-100 rounded-tl-none";
+      }
+
+      let avatarHTML = "";
+      if (role === "bot") {
+        avatarHTML = `
+          <div class="h-7 w-7 rounded-full bg-emerald-500/20 flex items-center justify-center mt-1">
+            <span class="text-emerald-400 text-xs font-bold">S</span>
+          </div>
+        `;
+      }
+
+      wrapper.innerHTML =
+        (role === "bot" ? avatarHTML : "") +
+        `<div class="${bubbleClasses}">${text}</div>`;
+
+      wrapper.dataset.temp = isTemporary ? "1" : "0";
+
+      chatContainer.appendChild(wrapper);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+
+      return wrapper;
+    }
+
+    function appendThinking() {
+      return appendMessage(
+        "bot",
+        `<span class="inline-flex items-center gap-2">
+           <span class="w-2 h-2 rounded-full bg-slate-400 animate-bounce"></span>
+           <span class="w-2 h-2 rounded-full bg-slate-500 animate-bounce [animation-delay:0.15s]"></span>
+           <span class="w-2 h-2 rounded-full bg-slate-600 animate-bounce [animation-delay:0.3s]"></span>
+         </span>`,
+        true
+      );
+    }
+
+    chatForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = userInput.value.trim();
+      if (!text) return;
+
+      // Disable input while sending
+      userInput.disabled = true;
+      sendBtn.disabled = true;
+
+      // Append user message
+      appendMessage("user", text);
+      userInput.value = "";
+      userInput.style.height = "auto";
+
+      // Show "thinking" bubble
+      const thinkingBubble = appendThinking();
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ query: text }),
+        });
+
+        const data = await res.json();
+        const reply = data.response || "(No response from server)";
+
+        // Replace thinking bubble with real reply
+        thinkingBubble.remove();
+        appendMessage("bot", reply);
+      } catch (err) {
+        console.error(err);
+        thinkingBubble.remove();
+        appendMessage("bot", "⚠️ Error talking to backend. Check if Flask server is running.");
+      } finally {
+        userInput.disabled = false;
+        sendBtn.disabled = false;
+        userInput.focus();
+      }
+    });
+
+    // Auto-resize textarea
+    userInput.addEventListener("input", () => {
+      userInput.style.height = "auto";
+      userInput.style.height = userInput.scrollHeight + "px";
+    });
+  </script>
+</body>
+</html>
