@@ -5,10 +5,7 @@ langchain_community==0.3.27
 chromadb==1.0.15
 flask==3.1.1
 pandas==2.3.1
-google-cloud-storage==2.0.0
 pypdf==5.9.0
 rapidfuzz==3.13.0
-PyMysql
 openai==2.1.0
 fastmcp==2.12.4
-mysql-connector-python==9.4.0
